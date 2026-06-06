@@ -13,29 +13,40 @@ st.set_page_config(page_title="Quantitative Trading Backtester", layout="wide")
 st.title("📈 Quantitative Trading Strategy Backtester")
 st.markdown("Backtest trading strategies on any stock using historical data")
 
-STRATEGIES = [
-    "sma_crossover", "ema_crossover", "rsi_mean_reversion",
-    "macd", "bb_breakout", "bb_mean_reversion",
-    "momentum", "buy_and_hold"
-]
+STRATEGY_OPTIONS = {
+    "📈 Trend Following — SMA Crossover": "sma_crossover",
+    "📈 Trend Following — EMA Crossover": "ema_crossover",
+    "📈 Trend Following — MACD": "macd",
+    "📈 Trend Following — Momentum (ROC)": "momentum",
+    "🔄 Mean Reversion — RSI": "rsi_mean_reversion",
+    "🔄 Mean Reversion — Bollinger Band Mean Reversion": "bb_mean_reversion",
+    "🔄 Mean Reversion — Bollinger Band Breakout": "bb_breakout",
+    "📊 Benchmark — Buy & Hold": "buy_and_hold",
+}
+
+STRATEGY_KEYS = list(STRATEGY_OPTIONS.keys())
+STRATEGIES = list(STRATEGY_OPTIONS.values())
 
 with st.sidebar:
     st.header("⚙️ Settings")
     mode = st.radio("Mode", ["Single", "Multi-Strategy", "Multi-Stock"])
-    
+
     if mode == "Single":
         ticker = st.text_input("Stock Ticker", value="AAPL").upper()
-        strategy = st.selectbox("Strategy", STRATEGIES)
+        strategy_label = st.selectbox("Strategy", STRATEGY_KEYS)
+        strategy = STRATEGY_OPTIONS[strategy_label]
         tickers = [ticker]
         strategies = [strategy]
     elif mode == "Multi-Strategy":
         ticker = st.text_input("Stock Ticker", value="AAPL").upper()
-        strategies = st.multiselect("Strategies", STRATEGIES, default=STRATEGIES[:4])
+        strategy_labels = st.multiselect("Strategies", STRATEGY_KEYS, default=STRATEGY_KEYS[:4])
+        strategies = [STRATEGY_OPTIONS[s] for s in strategy_labels]
         tickers = [ticker]
     else:
         tickers_input = st.text_input("Tickers (comma separated)", value="AAPL,MSFT,GOOGL,TSLA")
         tickers = [t.strip().upper() for t in tickers_input.split(",")]
-        strategy = st.selectbox("Strategy", STRATEGIES)
+        strategy_label = st.selectbox("Strategy", STRATEGY_KEYS)
+        strategy = STRATEGY_OPTIONS[strategy_label]
         strategies = [strategy]
 
     period = st.selectbox("Period", ["1y", "2y", "3y", "5y"], index=3)
@@ -151,10 +162,10 @@ def plot_chart(df, ticker, strategy, drawdown):
 
 if run:
     all_metrics = []
-    
+
     if mode == "Single":
-        with st.spinner(f"Running {strategies[0]} on {tickers[0]}..."):
-            df, metrics, drawdown = run_backtest(tickers[0], strategies[0], period, capital)
+        with st.spinner(f"Running {strategy} on {tickers[0]}..."):
+            df, metrics, drawdown = run_backtest(tickers[0], strategy, period, capital)
             if df is not None:
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total Return", f"{metrics['Total Return (%)']:.2f}%")
@@ -164,7 +175,7 @@ if run:
                 col4.metric("Sortino Ratio", f"{metrics['Sortino Ratio']:.3f}")
                 col5.metric("Max Drawdown", f"{metrics['Max Drawdown (%)']:.2f}%")
                 col6.metric("Calmar Ratio", f"{metrics['Calmar Ratio']:.3f}")
-                buf = plot_chart(df, tickers[0], strategies[0], drawdown)
+                buf = plot_chart(df, tickers[0], strategy, drawdown)
                 st.image(buf, use_container_width=True)
 
     elif mode == "Multi-Strategy":
@@ -217,13 +228,13 @@ if run:
         else:
             progress = st.progress(0)
             for i, tick in enumerate(tickers):
-                with st.spinner(f"Running {strategies[0]} on {tick}..."):
-                    df, metrics, drawdown = run_backtest(tick, strategies[0], period, capital)
+                with st.spinner(f"Running {strategy} on {tick}..."):
+                    df, metrics, drawdown = run_backtest(tick, strategy, period, capital)
                     if metrics:
                         all_metrics.append(metrics)
                 progress.progress((i + 1) / len(tickers))
             if all_metrics:
-                st.subheader(f"📊 Stock Comparison — {strategies[0].replace('_', ' ').title()}")
+                st.subheader(f"📊 Stock Comparison — {strategy.replace('_', ' ').title()}")
                 results_df = pd.DataFrame(all_metrics).drop(columns=['Strategy'])
                 results_df = results_df.sort_values('Sharpe Ratio', ascending=False)
                 st.dataframe(results_df.style.highlight_max(
@@ -242,7 +253,7 @@ if run:
                 ax.spines['right'].set_visible(False)
                 colors = ['#00d4ff', '#00ff88', '#ff4444', '#ffaa00']
                 bars = ax.bar(results_df['Ticker'], results_df['Total Return (%)'], color=colors[:len(results_df)])
-                ax.set_title(f'Stock Comparison — {strategies[0].replace("_", " ").title()}', color='white', fontsize=14)
+                ax.set_title(f'Stock Comparison — {strategy.replace("_", " ").title()}', color='white', fontsize=14)
                 ax.set_ylabel('Total Return (%)', color='white')
                 ax.tick_params(axis='x', colors='white')
                 for bar, val in zip(bars, results_df['Total Return (%)']):
