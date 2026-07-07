@@ -29,6 +29,12 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
+/* ── HIDE STREAMLIT DEFAULT CHROME ── */
+header[data-testid="stHeader"] { display: none !important; }
+#MainMenu { visibility: hidden !important; }
+.stDeployButton { display: none !important; }
+footer { visibility: hidden !important; }
+
 /* ── BASE ── */
 .stApp { background: #F8FAFC; color: #0F172A; font-family: 'Inter', sans-serif; }
 .main .block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px; }
@@ -583,13 +589,22 @@ with st.sidebar:
 
     st.markdown('<div style="height:0.8rem"></div>', unsafe_allow_html=True)
     run_btn = st.button("▶  Run Backtest", use_container_width=True, type="primary")
+    if st.session_state.get("has_run"):
+        if st.button("↩  Back to Home", use_container_width=True):
+            st.session_state.has_run = False
+            st.rerun()
     st.caption("Educational tool. Past performance does not indicate future results. Long-only, adjusted close via yfinance.")
 
+
+if run_btn:
+    st.session_state.has_run = True
+if "has_run" not in st.session_state:
+    st.session_state.has_run = False
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  HERO
 # ─────────────────────────────────────────────────────────────────────────────
-if not run_btn:
+if not st.session_state.has_run:
     st.markdown("""
     <div class="hero-badge">Portfolio Project · Finance &amp; Analytics</div>
     <h1>Quantitative<br>Trading Backtester</h1>
