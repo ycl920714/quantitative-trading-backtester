@@ -30,17 +30,10 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
-/* ── HIDE STREAMLIT DEFAULT CHROME (preserve sidebar toggle) ── */
-header[data-testid="stHeader"] {
-    background: transparent !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-}
-header[data-testid="stHeader"] > div { display: none !important; }
-#MainMenu { visibility: hidden !important; }
+/* ── HIDE STREAMLIT CHROME (safe — do NOT touch header) ── */
+#MainMenu { display: none !important; }
 .stDeployButton { display: none !important; }
-footer { visibility: hidden !important; }
+footer { display: none !important; }
 
 /* ── BASE ── */
 .stApp { background: #F8FAFC; color: #0F172A; font-family: 'Inter', sans-serif; }
