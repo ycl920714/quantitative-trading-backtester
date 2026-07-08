@@ -30,36 +30,46 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
-/* ── HIDE STREAMLIT DEFAULT CHROME ── */
-header[data-testid="stHeader"] { display: none !important; }
+/* ── HIDE STREAMLIT DEFAULT CHROME (preserve sidebar toggle) ── */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+header[data-testid="stHeader"] > div { display: none !important; }
 #MainMenu { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 footer { visibility: hidden !important; }
 
 /* ── BASE ── */
 .stApp { background: #F8FAFC; color: #0F172A; font-family: 'Inter', sans-serif; }
-.main .block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px; }
+.main .block-container { padding-top: 1rem; padding-bottom: 3rem; max-width: 1400px; }
 
 /* ── SIDEBAR ── */
 section[data-testid="stSidebar"] { background: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
 section[data-testid="stSidebar"] > div:first-child { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] .stMarkdown p { color: #94A3B8; font-size: 0.78rem; line-height: 1.5; }
 
-/* ── SIDEBAR TOGGLE BUTTON — always visible ── */
+/* ── SIDEBAR TOGGLE — fixed position, always on top ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.3rem !important;
+    z-index: 99999 !important;
     background: #FFFFFF !important;
     border: 1px solid #E2E8F0 !important;
-    border-radius: 0 8px 8px 0 !important;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.06) !important;
-    color: #64748B !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+    color: #0EA5E9 !important;
+    padding: 0.25rem !important;
 }
 [data-testid="collapsedControl"]:hover {
     background: #F0F9FF !important;
-    border-color: #BAE6FD !important;
-    color: #0EA5E9 !important;
+    border-color: #0EA5E9 !important;
 }
 
 /* ── HEADINGS ── */
@@ -707,6 +717,15 @@ def comp_table(rows):
     return d
 
 COLORS = [SKY, PURP, AMBER, EMRLD, ROSE, "#F472B6"]
+
+# Hint banner — reminds user sidebar exists if it's collapsed
+st.markdown(
+    '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;'
+    'padding:0.55rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#1D4ED8;">'
+    '⬅️  Use the <strong>sidebar on the left</strong> to change ticker, strategy, or settings, '
+    'then click <strong>Run Backtest</strong> again.</div>',
+    unsafe_allow_html=True,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
