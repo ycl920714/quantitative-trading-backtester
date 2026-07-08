@@ -30,10 +30,11 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
-/* ── HIDE STREAMLIT CHROME (safe — do NOT touch header) ── */
+/* ── HIDE STREAMLIT CHROME ── */
 #MainMenu { display: none !important; }
 .stDeployButton { display: none !important; }
 footer { display: none !important; }
+header[data-testid="stHeader"] { background-color: #F8FAFC !important; border-bottom: none !important; }
 
 /* ── BASE ── */
 .stApp { background: #F8FAFC; color: #0F172A; font-family: 'Inter', sans-serif; }
@@ -186,8 +187,10 @@ hr { border-color: #E2E8F0 !important; }
 .hero-subtitle { color: #64748B; font-size: 1rem; line-height: 1.6; max-width: 680px; margin-bottom: 2rem; }
 .mode-card {
     background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px;
-    padding: 1.4rem 1.5rem; transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s; height: 100%;
+    padding: 1.4rem 1.5rem; transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s;
+    min-height: 210px; display: flex; flex-direction: column;
 }
+.mode-card-desc { flex: 1; }
 .mode-card:hover { border-color: #BAE6FD; box-shadow: 0 4px 20px rgba(14,165,233,0.08); transform: translateY(-2px); }
 .mode-card-icon { font-size: 1.5rem; margin-bottom: 0.6rem; }
 .mode-card-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 0.95rem; color: #0F172A; margin-bottom: 0.35rem; }
