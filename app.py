@@ -17,6 +17,7 @@ st.set_page_config(
     page_title="QTB — Quantitative Trading Backtester",
     page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,47 +45,21 @@ section[data-testid="stSidebar"] { background: #FFFFFF !important; border-right:
 section[data-testid="stSidebar"] > div:first-child { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] .stMarkdown p { color: #94A3B8; font-size: 0.78rem; line-height: 1.5; }
 
-/* ── SIDEBAR TOGGLE BUTTON — keep visible at all times ── */
+/* ── SIDEBAR TOGGLE BUTTON — always visible ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    color: #64748B !important;
     background: #FFFFFF !important;
     border: 1px solid #E2E8F0 !important;
     border-radius: 0 8px 8px 0 !important;
     box-shadow: 2px 0 8px rgba(0,0,0,0.06) !important;
+    color: #64748B !important;
 }
 [data-testid="collapsedControl"]:hover {
     background: #F0F9FF !important;
     border-color: #BAE6FD !important;
     color: #0EA5E9 !important;
-}
-
-/* ── HERO MODE CARD BUTTONS ── */
-.card-btn > button {
-    background: #FFFFFF !important;
-    border: 1px solid #E2E8F0 !important;
-    border-radius: 14px !important;
-    padding: 1.3rem 1.4rem !important;
-    text-align: left !important;
-    color: #0F172A !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 0.88rem !important;
-    height: 9rem !important;
-    width: 100% !important;
-    box-shadow: none !important;
-    transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s !important;
-    white-space: normal !important;
-    line-height: 1.5 !important;
-}
-.card-btn > button:hover {
-    border-color: #BAE6FD !important;
-    box-shadow: 0 4px 20px rgba(14,165,233,0.1) !important;
-    transform: translateY(-2px) !important;
-    background: #F0F9FF !important;
-    color: #0369A1 !important;
 }
 
 /* ── HEADINGS ── */
@@ -264,13 +239,15 @@ def strategy_rsi(df, period=14, oversold=30, overbought=70):
     ag = d.clip(lower=0).rolling(period).mean()
     al = (-d.clip(upper=0)).rolling(period).mean()
     o["rsi"] = 100 - 100 / (1 + ag / al.replace(0, np.nan))
-    sig, pos = pd.Series(0.0, index=o.index), 0
-    for i in range(len(o)):
-        v = o["rsi"].iloc[i]
-        if not np.isnan(v):
-            if v < oversold: pos = 1
-            elif v > overbought: pos = 0
-        sig.iloc[i] = pos
+    # Vectorised signal: buy when RSI crosses below oversold, sell when above overbought
+    long  = (o["rsi"] < oversold).astype(float)
+    short = (o["rsi"] > overbought).astype(float)
+    sig   = long.copy()
+    sig[short == 1] = 0
+    # Forward-fill to hold position between signals
+    sig = sig.replace(0, np.nan)
+    sig = sig.ffill().fillna(0)
+    sig[o["rsi"] > overbought] = 0
     o["signal"] = sig.shift(1).fillna(0)
     return o
 
@@ -279,12 +256,13 @@ def strategy_bb(df, window=20, num_std=2.0):
     o["mid"] = o["Close"].rolling(window).mean()
     s = o["Close"].rolling(window).std()
     o["upper"], o["lower"] = o["mid"] + num_std * s, o["mid"] - num_std * s
-    sig, pos = pd.Series(0.0, index=o.index), 0
-    for i in range(len(o)):
-        if np.isnan(o["lower"].iloc[i]): sig.iloc[i] = pos; continue
-        if o["Close"].iloc[i] < o["lower"].iloc[i]: pos = 1
-        elif o["Close"].iloc[i] > o["mid"].iloc[i]: pos = 0
-        sig.iloc[i] = pos
+    # Entry: price below lower band; Exit: price above mid band
+    entry = (o["Close"] < o["lower"]).astype(float)
+    exit_ = (o["Close"] > o["mid"]).astype(float)
+    sig = entry.copy().replace(0, np.nan)
+    sig[exit_ == 1] = 0
+    sig = sig.ffill().fillna(0)
+    sig[exit_ == 1] = 0
     o["signal"] = sig.shift(1).fillna(0)
     return o
 
@@ -660,20 +638,26 @@ if not st.session_state.has_run:
     </p>""", unsafe_allow_html=True)
 
     MODE_CARDS = [
-        ("🎯", "Single",            "Single",              "One stock, one strategy — equity curve, signals, rolling Sharpe, return distribution, VaR/CVaR, and Monte Carlo."),
-        ("📊", "Multi-Strategy",    "Multi-Strategy",      "All four strategies on one stock side-by-side. Sharpe-ranked comparison table."),
-        ("🌍", "Multi-Stock",       "Multi-Stock",         "Same strategy across multiple tickers — tests whether the edge is broadly robust."),
-        ("🔬", "Sensitivity",       "Parameter Sensitivity","Parameter heatmap — flags overfitting when performance only appears at a single exact setting."),
+        ("🎯", "Single",         "Single",               "One stock, one strategy — equity curve, signals, rolling Sharpe, return distribution, VaR/CVaR, and Monte Carlo."),
+        ("📊", "Multi-Strategy", "Multi-Strategy",       "All four strategies on one stock side-by-side. Sharpe-ranked comparison table."),
+        ("🌍", "Multi-Stock",    "Multi-Stock",          "Same strategy across multiple tickers — tests whether the edge is broadly robust."),
+        ("🔬", "Sensitivity",    "Parameter Sensitivity","Parameter heatmap — flags overfitting when performance only appears at a single exact setting."),
     ]
     cols = st.columns(4, gap="small")
     for col, (icon, label, mode_key, desc) in zip(cols, MODE_CARDS):
         with col:
-            st.markdown('<div class="card-btn">', unsafe_allow_html=True)
-            if st.button(f"{icon}  **{label}**\n\n{desc}", key=f"hero_{mode_key}", use_container_width=True):
+            st.markdown(
+                f'<div class="mode-card">'
+                f'<div class="mode-card-icon">{icon}</div>'
+                f'<div class="mode-card-title">{label}</div>'
+                f'<div class="mode-card-desc">{desc}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(f"Open {label} →", key=f"hero_{mode_key}", use_container_width=True):
                 st.session_state.selected_mode = mode_key
                 st.session_state.has_run = True
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<hr class="section-rule">', unsafe_allow_html=True)
     st.markdown("##### Built-in strategies")
@@ -770,33 +754,34 @@ if mode == "Single":
         # Signals chart
         st.plotly_chart(plot_signals(result), use_container_width=True)
 
-        # ── NEW: Rolling Sharpe ──
-        st.markdown("### Rolling Sharpe Ratio")
-        st.caption("A declining rolling Sharpe suggests the strategy's edge is fading — an important robustness check.")
-        st.plotly_chart(plot_rolling_sharpe(result["strategy_returns"]), use_container_width=True)
+        # ── ADVANCED ANALYSIS (opt-in expander to keep page clean & fast) ──
+        with st.expander("🔬  Advanced Analysis — Rolling Sharpe · Return Distribution · Monte Carlo", expanded=False):
+            st.caption("These charts run on demand. Monte Carlo (300 paths) takes a few seconds.")
 
-        # ── NEW: Return Distribution ──
-        st.markdown("### Return Distribution")
-        st.caption("Comparing the empirical return distribution against a normal curve reveals fat tails and skewness — key risks that standard deviation alone misses.")
-        dist_fig = plot_return_distribution(result["strategy_returns"], result["returns"])
-        if dist_fig:
-            st.plotly_chart(dist_fig, use_container_width=True)
-            r = result["strategy_returns"].dropna()
-            sk = float(stats.skew(r[r != 0]))
-            ku = float(stats.kurtosis(r[r != 0]))
-            tail_warn = ku > 1.5
-            insight = (
-                f"**Excess kurtosis = {ku:.2f}** — the return distribution has {'heavier tails than a normal distribution, meaning extreme losses occur more often than standard models assume' if tail_warn else 'near-normal tail thickness'}. "
-                f"**Skewness = {sk:.2f}** ({'left-skewed: large losses are more likely than large gains' if sk < -0.3 else 'right-skewed: large gains outweigh large losses' if sk > 0.3 else 'roughly symmetric'})."
-            )
-            st.markdown(f'<div class="insight-box">{insight}</div>', unsafe_allow_html=True)
+            st.markdown("**Rolling Sharpe Ratio**")
+            st.caption("A declining rolling Sharpe suggests the strategy's edge is fading.")
+            st.plotly_chart(plot_rolling_sharpe(result["strategy_returns"]), use_container_width=True)
 
-        # ── NEW: Monte Carlo ──
-        st.markdown("### Monte Carlo Simulation")
-        st.caption("Bootstrap resampling of historical daily returns generates 300 simulated equity paths. The shaded bands show where 50% and 90% of outcomes are expected to fall.")
-        mc_fig = plot_monte_carlo(result["strategy_returns"], initial_capital)
-        if mc_fig:
-            st.plotly_chart(mc_fig, use_container_width=True)
+            st.markdown("**Return Distribution**")
+            st.caption("Empirical vs normal — reveals fat tails and skewness that standard deviation misses.")
+            dist_fig = plot_return_distribution(result["strategy_returns"], result["returns"])
+            if dist_fig:
+                st.plotly_chart(dist_fig, use_container_width=True)
+                r = result["strategy_returns"].dropna()
+                sk = float(stats.skew(r[r != 0]))
+                ku = float(stats.kurtosis(r[r != 0]))
+                tail_warn = ku > 1.5
+                insight = (
+                    f"**Excess kurtosis = {ku:.2f}** — {'heavier tails than normal, meaning extreme losses occur more often than standard models assume' if tail_warn else 'near-normal tail thickness'}. "
+                    f"**Skewness = {sk:.2f}** ({'left-skewed: large losses more likely than large gains' if sk < -0.3 else 'right-skewed: large gains outweigh large losses' if sk > 0.3 else 'roughly symmetric'})."
+                )
+                st.markdown(f'<div class="insight-box">{insight}</div>', unsafe_allow_html=True)
+
+            st.markdown("**Monte Carlo Simulation**")
+            st.caption("Bootstrap resampling generates 300 simulated paths. Shaded bands show 50% and 90% confidence intervals.")
+            mc_fig = plot_monte_carlo(result["strategy_returns"], initial_capital)
+            if mc_fig:
+                st.plotly_chart(mc_fig, use_container_width=True)
 
         st.markdown('<hr class="section-rule">', unsafe_allow_html=True)
 
