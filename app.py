@@ -44,6 +44,49 @@ section[data-testid="stSidebar"] { background: #FFFFFF !important; border-right:
 section[data-testid="stSidebar"] > div:first-child { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] .stMarkdown p { color: #94A3B8; font-size: 0.78rem; line-height: 1.5; }
 
+/* ── SIDEBAR TOGGLE BUTTON — keep visible at all times ── */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #64748B !important;
+    background: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 0 8px 8px 0 !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.06) !important;
+}
+[data-testid="collapsedControl"]:hover {
+    background: #F0F9FF !important;
+    border-color: #BAE6FD !important;
+    color: #0EA5E9 !important;
+}
+
+/* ── HERO MODE CARD BUTTONS ── */
+.card-btn > button {
+    background: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 14px !important;
+    padding: 1.3rem 1.4rem !important;
+    text-align: left !important;
+    color: #0F172A !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.88rem !important;
+    height: 9rem !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s !important;
+    white-space: normal !important;
+    line-height: 1.5 !important;
+}
+.card-btn > button:hover {
+    border-color: #BAE6FD !important;
+    box-shadow: 0 4px 20px rgba(14,165,233,0.1) !important;
+    transform: translateY(-2px) !important;
+    background: #F0F9FF !important;
+    color: #0369A1 !important;
+}
+
 /* ── HEADINGS ── */
 h1,h2,h3,h4 { font-family: 'Space Grotesk', sans-serif !important; color: #0F172A !important; }
 h1 { font-size: 2.4rem !important; font-weight: 700 !important; letter-spacing: -0.03em !important; line-height: 1.1 !important; }
@@ -550,9 +593,11 @@ def plot_monte_carlo(strategy_returns, initial_capital, n_sims=300, horizon=252)
 st.markdown(CSS, unsafe_allow_html=True)
 
 with st.sidebar:
+    MODE_LIST = ["Single", "Multi-Strategy", "Multi-Stock", "Parameter Sensitivity"]
     st.markdown('<p class="sidebar-label">Mode</p>', unsafe_allow_html=True)
-    mode = st.radio("", ["Single", "Multi-Strategy", "Multi-Stock", "Parameter Sensitivity"],
-                    label_visibility="collapsed")
+    _mode_idx = MODE_LIST.index(st.session_state.get("selected_mode", "Single"))
+    mode = st.radio("", MODE_LIST, index=_mode_idx, label_visibility="collapsed")
+    st.session_state.selected_mode = mode
 
     st.markdown('<p class="sidebar-label">Universe</p>', unsafe_allow_html=True)
     if mode in ("Single", "Multi-Strategy", "Parameter Sensitivity"):
@@ -614,18 +659,21 @@ if not st.session_state.has_run:
         and fat-tail risk analysis.
     </p>""", unsafe_allow_html=True)
 
-    for row in [
-        [("🎯","Single","One stock, one strategy — equity curve, signals, six risk metrics, rolling Sharpe, return distribution, VaR/CVaR, and Monte Carlo."),
-         ("📊","Multi-Strategy","All four strategies on one stock side-by-side. Sharpe-ranked comparison table."),
-         ("🌍","Multi-Stock","Same strategy across multiple tickers — tests whether the edge is broadly robust."),
-         ("🔬","Sensitivity","Parameter heatmap — flags overfitting when performance only appears at a single exact setting.")],
-    ]:
-        cols = st.columns(4, gap="small")
-        for col, (icon, title, desc) in zip(cols, row):
-            with col:
-                st.markdown(f'<div class="mode-card"><div class="mode-card-icon">{icon}</div>'
-                            f'<div class="mode-card-title">{title}</div>'
-                            f'<div class="mode-card-desc">{desc}</div></div>', unsafe_allow_html=True)
+    MODE_CARDS = [
+        ("🎯", "Single",            "Single",              "One stock, one strategy — equity curve, signals, rolling Sharpe, return distribution, VaR/CVaR, and Monte Carlo."),
+        ("📊", "Multi-Strategy",    "Multi-Strategy",      "All four strategies on one stock side-by-side. Sharpe-ranked comparison table."),
+        ("🌍", "Multi-Stock",       "Multi-Stock",         "Same strategy across multiple tickers — tests whether the edge is broadly robust."),
+        ("🔬", "Sensitivity",       "Parameter Sensitivity","Parameter heatmap — flags overfitting when performance only appears at a single exact setting."),
+    ]
+    cols = st.columns(4, gap="small")
+    for col, (icon, label, mode_key, desc) in zip(cols, MODE_CARDS):
+        with col:
+            st.markdown('<div class="card-btn">', unsafe_allow_html=True)
+            if st.button(f"{icon}  **{label}**\n\n{desc}", key=f"hero_{mode_key}", use_container_width=True):
+                st.session_state.selected_mode = mode_key
+                st.session_state.has_run = True
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<hr class="section-rule">', unsafe_allow_html=True)
     st.markdown("##### Built-in strategies")
