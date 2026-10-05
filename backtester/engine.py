@@ -96,6 +96,10 @@ class Backtester:
 
         The strategy's `generate_signals` method must return a DataFrame
         that includes a 'signal' column: +1 = long, -1 = short, 0 = flat.
+
+        Timing: the signal from the close of day t is executed at the OPEN
+        of day t+1 (no same-bar trading, so no look-ahead). Positions are
+        marked to market at each close.
         """
         signals_df = strategy.generate_signals(df.copy())
         signals_df = signals_df.dropna(subset=["signal"])
@@ -108,12 +112,15 @@ class Backtester:
         trades: list[Trade] = []
         equity_values = []
 
-        prices = signals_df["Close"].values
+        closes = signals_df["Close"].values
+        opens  = (signals_df["Open"].values if "Open" in signals_df
+                  else signals_df["Close"].shift(1).bfill().values)
         dates  = signals_df.index
-        sigs   = signals_df["signal"].values
+        # yesterday's signal drives today's trade
+        sigs   = signals_df["signal"].shift(1).fillna(0).values
 
         for i in range(len(signals_df)):
-            price = prices[i]
+            price = opens[i]          # execution price
             sig   = int(sigs[i])
             date  = dates[i]
 
@@ -157,17 +164,18 @@ class Backtester:
                     entry_price= entry_px
 
             # ── mark-to-market equity ──────────────────────────────────
+            close = closes[i]
             if direction == 1:
-                mkt_value = shares * price
+                mkt_value = shares * close
             elif direction == -1:
-                mkt_value = shares * (2 * entry_price - price)   # short P&L
+                mkt_value = shares * (2 * entry_price - close)   # short P&L
             else:
                 mkt_value = 0.0
             equity_values.append(cash + mkt_value)
 
         # close any open trade at the last price
         if direction != 0:
-            price = prices[-1]
+            price = closes[-1]
             date  = dates[-1]
             slip  = price * self.slippage
             exit_px = price - slip if direction == 1 else price + slip
