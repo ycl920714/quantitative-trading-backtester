@@ -47,6 +47,10 @@ where `gap_t = Open_t / Close_{t−1} − 1`, `intraday_t = Close_t / Open_t −
 
 **Benchmark.** Buy at the first close and hold, no costs.
 
+## Findings
+
+See [FINDINGS.md](FINDINGS.md). In short: over the last 10 years on eight large US stocks and ETFs, buy-and-hold beat every strategy on average return and Sharpe ratio. Only 4 of 64 strategy and stock combinations had a higher Sharpe ratio.
+
 ## Limitations
 
 - Survivorship bias: the default tickers are large companies that still exist today
