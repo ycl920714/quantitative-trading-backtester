@@ -17,6 +17,16 @@ import yfinance as yf
 from plotly.subplots import make_subplots
 from scipy import stats
 
+import importlib
+
+import backtester.strategies
+import backtester.vectorised
+
+# Streamlit re-runs app.py on every change but keeps imported modules in
+# memory. Reloading makes sure an updated strategy file is actually used.
+importlib.reload(backtester.strategies)
+importlib.reload(backtester.vectorised)
+
 from backtester.strategies import STRATEGY_REGISTRY
 from backtester.vectorised import compute_metrics, run_vectorised, var_cvar
 
