@@ -14,6 +14,7 @@ Yun-Chen Lin, BSc Finance and Business, University of Sussex
 - Splits history into an in-sample and an out-of-sample period, and in *Parameter sensitivity* mode picks parameters on the first period only before testing them on the second
 - Reports CAGR, volatility, Sharpe, Sortino, maximum drawdown, Calmar, time in market, and historical VaR and CVaR
 - Runs a "strategy study" across a basket of tickers to see whether any result holds beyond one stock
+- Backtests three Value at Risk models (historical simulation, normal, EWMA) with the Kupiec, Christoffersen and Basel traffic-light tests
 
 ## Strategies
 
@@ -47,6 +48,8 @@ where `gap_t = Open_t / Close_{t−1} − 1`, `intraday_t = Close_t / Open_t −
 
 **Benchmark.** Buy at the first close and hold, no costs.
 
+**VaR backtesting.** Each day's one-day VaR is estimated only from earlier returns and compared with that day's actual return. The Kupiec test checks whether the share of exceptions matches the confidence level, the Christoffersen test checks whether exceptions cluster in time, and the Basel traffic light classifies the number of 99% exceptions in the last 250 days (green 0 to 4, yellow 5 to 9, red 10 or more).
+
 ## Findings
 
 See [FINDINGS.md](FINDINGS.md). In short: over the last 10 years on eight large US stocks and ETFs, buy-and-hold beat every strategy on average return and Sharpe ratio. Only 4 of 64 strategy and stock combinations had a higher Sharpe ratio.
@@ -68,6 +71,7 @@ backtest_runner.py      Command-line runner, saves charts and a CSV summary
 backtester/
   strategies.py         The nine strategies
   vectorised.py         Vectorised engine and metrics used by the app
+  risk.py               VaR forecasts and VaR backtesting tests
   engine.py             Event-driven engine with trade-by-trade records
   performance.py        Full metric set for the command-line runner
   data_fetcher.py       Price download via yfinance

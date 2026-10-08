@@ -19,6 +19,7 @@ from scipy import stats
 
 import importlib
 
+import backtester.risk
 import backtester.strategies
 import backtester.vectorised
 
@@ -26,9 +27,11 @@ import backtester.vectorised
 # memory. Reloading makes sure an updated strategy file is actually used.
 importlib.reload(backtester.strategies)
 importlib.reload(backtester.vectorised)
+importlib.reload(backtester.risk)
 
 from backtester.strategies import STRATEGY_REGISTRY
 from backtester.vectorised import compute_metrics, run_vectorised, var_cvar
+from backtester.risk import METHODS as VAR_METHODS, backtest_var
 
 st.set_page_config(
     page_title="Trading Strategy Backtester",
@@ -211,7 +214,7 @@ def plot_monte_carlo(r, capital, n_sims=500, horizon=252):
 # Sidebar
 # ---------------------------------------------------------------------------
 MODES = ["About", "Single backtest", "Compare strategies", "Compare stocks",
-         "Parameter sensitivity", "Strategy study"]
+         "Parameter sensitivity", "Strategy study", "VaR backtest"]
 
 with st.sidebar:
     st.markdown("### Settings")
@@ -233,13 +236,18 @@ with st.sidebar:
         strat_names = list(STRATS)
 
     period = st.selectbox("History", ["2y", "5y", "10y", "20y", "max"],
-                          index=2 if mode == "Strategy study" else 1)
-    capital = st.number_input("Starting capital ($)", min_value=100, value=10_000, step=1_000)
-    cost_bps = st.slider("Transaction cost per trade (bps)", 0, 50, 10,
-                         help="Charged on each unit of position change. 10 bps = 0.10%.")
-    in_sample = st.slider("In-sample share of history (%)", 50, 90, 70)
-    allow_short = st.checkbox("Allow short selling", value=False)
-    rf = st.number_input("Risk-free rate for Sharpe (% per year)", 0.0, 10.0, 0.0, 0.5) / 100
+                          index=2 if mode in ("Strategy study", "VaR backtest") else 1)
+    if mode == "VaR backtest":
+        var_conf = st.selectbox("VaR confidence", [0.99, 0.95], format_func=lambda c: f"{c:.0%}")
+        var_window = st.slider("Estimation window (days)", 100, 500, 250, step=50)
+        capital, cost_bps, in_sample, allow_short, rf = 10_000, 10, 70, False, 0.0
+    else:
+        capital = st.number_input("Starting capital ($)", min_value=100, value=10_000, step=1_000)
+        cost_bps = st.slider("Transaction cost per trade (bps)", 0, 50, 10,
+                             help="Charged on each unit of position change. 10 bps = 0.10%.")
+        in_sample = st.slider("In-sample share of history (%)", 50, 90, 70)
+        allow_short = st.checkbox("Allow short selling", value=False)
+        rf = st.number_input("Risk-free rate for Sharpe (% per year)", 0.0, 10.0, 0.0, 0.5) / 100
 
     params = {}
     if mode in ("Single backtest", "Compare stocks"):
@@ -262,7 +270,8 @@ if mode == "About":
         '<p class="lead">I built this to answer a simple question: do common technical trading '
         "rules beat buying and holding once you account for trading costs and test them on data "
         "they were not tuned on? It runs nine rule-based strategies on daily US stock and ETF data "
-        "and compares each one with buy-and-hold.</p>"
+        "and compares each one with buy-and-hold. A second part checks how well three standard "
+        "Value at Risk models actually forecast losses.</p>"
         '<p class="small">Yun-Chen Lin · BSc Finance and Business, University of Sussex · '
         '<a href="https://github.com/ycl920714/quantitative-trading-backtester">Source code on GitHub</a></p>',
         unsafe_allow_html=True,
@@ -281,7 +290,9 @@ if mode == "About":
         "- **Parameter sensitivity**: picks the best parameters on the in-sample period, then "
         "checks how they do out of sample.\n"
         "- **Strategy study**: every strategy on a basket of stocks, summarised in one table. "
-        "This is the mode behind the findings above."
+        "This is the mode behind the findings above.\n"
+        "- **VaR backtest**: forecasts one-day VaR with three models and tests the forecasts "
+        "with the Kupiec, Christoffersen and Basel traffic-light tests."
     )
 
     st.markdown("## Methodology")
@@ -297,7 +308,11 @@ if mode == "About":
         "- **Metrics**: CAGR, volatility, Sharpe and Sortino (excess of the chosen risk-free rate, "
         "Sortino uses downside deviation), maximum drawdown, Calmar, time in market, and historical "
         "one-day VaR and CVaR at 95% and 99%.\n"
-        "- **Benchmark**: buying at the first close and holding, with no costs."
+        "- **Benchmark**: buying at the first close and holding, with no costs.\n"
+        "- **VaR backtest**: each day's VaR is estimated only from earlier returns (historical "
+        "simulation, a normal model, and EWMA with lambda 0.94) and compared with that day's actual "
+        "return. Kupiec tests whether the number of exceptions is right, Christoffersen tests "
+        "whether they cluster, and the Basel traffic light classifies the last 250 days."
     )
 
     st.markdown("## Limitations")
@@ -580,3 +595,59 @@ elif mode == "Strategy study":
         for c in ["Sharpe", "B&H Sharpe", "Position changes per year"]:
             out[c] = out[c].apply(num)
         st.dataframe(out, width="stretch", hide_index=True)
+
+
+# ---------------------------------------------------------------------------
+# VaR backtest
+# ---------------------------------------------------------------------------
+elif mode == "VaR backtest":
+    ticker = tickers[0]
+    st.title(f"VaR backtest: {ticker}")
+    st.markdown(
+        f"A {var_conf:.0%} one-day VaR should be breached on about {1 - var_conf:.0%} of days, and "
+        "breaches should be spread out rather than bunched together. Each model below forecasts "
+        f"tomorrow's VaR from the previous {var_window} days only, then is checked against what "
+        "actually happened. The returns tested are those of simply holding the asset.")
+    df = load(ticker)
+    if df is None:
+        st.stop()
+    rets = df["Close"].pct_change().dropna()
+
+    frames, rows = {}, []
+    for key in VAR_METHODS:
+        frames[key], summ = backtest_var(rets, key, var_conf, var_window)
+        rows.append(summ)
+    tbl = pd.DataFrame(rows).set_index("Method")
+    shown = tbl.copy()
+    shown["Exception rate"] = tbl["Exception rate"].apply(lambda x: f"{x:.2%}")
+    for c in ["Kupiec p-value", "Independence p-value"]:
+        shown[c] = tbl[c].apply(lambda x: "n/a" if pd.isna(x) else f"{x:.3f}")
+    st.dataframe(shown, width="stretch")
+    st.caption("A p-value below 0.05 means the test rejects the model at the 5% level. "
+               "Kupiec: wrong number of exceptions. Independence: exceptions cluster in time. "
+               "The Basel zone applies to 99% VaR only.")
+
+    pick = st.radio("Show model", list(VAR_METHODS), format_func=lambda k: VAR_METHODS[k],
+                    horizontal=True)
+    f = frames[pick]
+    ex = f[f["exception"]]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=f.index, y=f["return"] * 100, name="Daily return",
+                         marker_color="#CBD5E1", marker_line_width=0))
+    fig.add_trace(go.Scatter(x=f.index, y=f["VaR"] * 100, name=f"{var_conf:.0%} VaR forecast",
+                             line=dict(color=BLUE, width=1.5)))
+    fig.add_trace(go.Scatter(x=ex.index, y=ex["return"] * 100, mode="markers", name="Exception",
+                             marker=dict(color=RED, size=6)))
+    fig.update_layout(height=460, yaxis_title="Daily return (%)", bargap=0, **LAYOUT)
+    st.plotly_chart(fig, width="stretch")
+
+    roll = f["exception"].rolling(250).sum()
+    fig2 = go.Figure(go.Scatter(x=roll.index, y=roll, name="Exceptions in last 250 days",
+                                line=dict(color=INK, width=1.5)))
+    if var_conf == 0.99:
+        fig2.add_hrect(y0=-0.5, y1=4.5, fillcolor="rgba(21,128,61,0.08)", line_width=0)
+        fig2.add_hrect(y0=4.5, y1=9.5, fillcolor="rgba(202,138,4,0.10)", line_width=0)
+        fig2.add_hrect(y0=9.5, y1=max(roll.max() + 1, 12), fillcolor="rgba(185,28,28,0.08)", line_width=0)
+    fig2.update_layout(height=320, title="Rolling 250-day exception count (Basel zones shaded)",
+                       yaxis_title="Exceptions", **LAYOUT)
+    st.plotly_chart(fig2, width="stretch")
